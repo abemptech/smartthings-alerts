@@ -1,10 +1,10 @@
 import axios from 'axios';
 import nodemailer from 'nodemailer';
 
-const PAT_TOKEN = 'your_pat_token_here';
-const ALERT_EMAIL = 'your_email_here';
-const GMAIL_USER = 'your_gmail_here';
-const GMAIL_APP_PASSWORD = 'your_app_password_here';
+const PAT_TOKEN = 'b7a5d14d-5bcd-4121-8501-e69ca43be769';
+const ALERT_EMAIL = 'laurie.dale@abilitybeyond.org';
+const GMAIL_USER = 'abemptech@gmail.com';
+const GMAIL_APP_PASSWORD = 'Spr!ng2020';
 const BATTERY_THRESHOLD = 20;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));

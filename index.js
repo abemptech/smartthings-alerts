@@ -1,7 +1,9 @@
 import axios from 'axios';
 import nodemailer from 'nodemailer';
 
-const PAT_TOKEN = process.env.PAT_TOKEN;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+const ST_CLIENT_ID = process.env.ST_CLIENT_ID;
+const ST_CLIENT_SECRET = process.env.ST_CLIENT_SECRET;
 const ALERT_EMAIL = process.env.ALERT_EMAIL;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
@@ -78,6 +80,25 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+async function getAccessToken() {
+  const response = await axios.post(
+    'https://api.smartthings.com/oauth/token',
+    new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: REFRESH_TOKEN,
+      client_id: ST_CLIENT_ID,
+      client_secret: ST_CLIENT_SECRET
+    }),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${ST_CLIENT_ID}:${ST_CLIENT_SECRET}`).toString('base64')}`
+      }
+    }
+  );
+  return response.data.access_token;
+}
+
 async function sendEmail(subject, body) {
   await transporter.sendMail({
     from: GMAIL_USER,
@@ -87,13 +108,13 @@ async function sendEmail(subject, body) {
   });
 }
 
-async function checkLocation(location) {
+async function checkLocation(location, accessToken) {
   console.log(`Checking location: ${location.name}`);
 
   const devicesResponse = await axios.get(
     'https://api.smartthings.com/v1/devices',
     {
-      headers: { Authorization: `Bearer ${PAT_TOKEN}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
       params: { locationId: location.id }
     }
   );
@@ -109,7 +130,7 @@ async function checkLocation(location) {
     try {
       const healthResponse = await axios.get(
         `https://api.smartthings.com/v1/devices/${device.deviceId}/health`,
-        { headers: { Authorization: `Bearer ${PAT_TOKEN}` } }
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
       const state = healthResponse.data.state;
@@ -128,7 +149,7 @@ async function checkLocation(location) {
         await sleep(500);
         const statusResponse = await axios.get(
           `https://api.smartthings.com/v1/devices/${device.deviceId}/status`,
-          { headers: { Authorization: `Bearer ${PAT_TOKEN}` } }
+          { headers: { Authorization: `Bearer ${accessToken}` } }
         );
         const batteryValue = statusResponse.data.components?.main?.battery?.battery?.value;
         if (batteryValue !== null && batteryValue !== undefined && batteryValue < BATTERY_THRESHOLD) {
@@ -165,10 +186,23 @@ async function checkLocation(location) {
 
 async function main() {
   console.log('Starting SmartThings alerts check...');
-  for (const location of LOCATIONS) {
-    await checkLocation(location);
-    await sleep(1000);
+  
+  try {
+    const accessToken = await getAccessToken();
+    console.log('Access token obtained successfully');
+    
+    for (const location of LOCATIONS) {
+      await checkLocation(location, accessToken);
+      await sleep(1000);
+    }
+  } catch (err) {
+    console.error('Failed to get access token:', err.message);
+    await sendEmail(
+      'SmartThings Alert - Authentication Error',
+      `Failed to get access token: ${err.message}\n\nPlease check your OAuth credentials.`
+    );
   }
+  
   console.log('Done.');
 }
 

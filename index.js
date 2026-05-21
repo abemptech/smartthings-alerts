@@ -1,7 +1,7 @@
 import axios from 'axios';
 import nodemailer from 'nodemailer';
+import { createClient } from 'redis';
 
-const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
 const ST_CLIENT_ID = process.env.ST_CLIENT_ID;
 const ST_CLIENT_SECRET = process.env.ST_CLIENT_SECRET;
 const ALERT_EMAIL = process.env.ALERT_EMAIL;
@@ -80,12 +80,15 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-async function getAccessToken() {
+async function getAccessToken(redisClient) {
+  const refreshToken = await redisClient.get('refresh_token');
+  console.log('Using refresh token from Redis:', refreshToken?.substring(0, 8) + '...');
+
   const response = await axios.post(
     'https://api.smartthings.com/oauth/token',
     new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: REFRESH_TOKEN,
+      refresh_token: refreshToken,
       client_id: ST_CLIENT_ID,
       client_secret: ST_CLIENT_SECRET
     }),
@@ -96,6 +99,11 @@ async function getAccessToken() {
       }
     }
   );
+
+  const newRefreshToken = response.data.refresh_token;
+  await redisClient.set('refresh_token', newRefreshToken);
+  console.log('New refresh token saved to Redis');
+
   return response.data.access_token;
 }
 
@@ -186,23 +194,33 @@ async function checkLocation(location, accessToken) {
 
 async function main() {
   console.log('Starting SmartThings alerts check...');
-  
+
+  const redisClient = createClient({ url: process.env.REDIS_URL });
+  await redisClient.connect();
+
   try {
-    const accessToken = await getAccessToken();
+    const accessToken = await getAccessToken(redisClient);
     console.log('Access token obtained successfully');
-    
+
     for (const location of LOCATIONS) {
       await checkLocation(location, accessToken);
       await sleep(1000);
     }
-} catch (err) {
+  } catch (err) {
     console.error('Failed to get access token:', err.message);
     console.error('Response data:', JSON.stringify(err.response?.data));
-    await sendEmail(
-      'SmartThings Alert - Authentication Error',
-      `Failed to get access token: ${err.message}\n\n${JSON.stringify(err.response?.data)}`
-    );
+    try {
+      await sendEmail(
+        'SmartThings Alert - Authentication Error',
+        `Failed to get access token: ${err.message}\n\n${JSON.stringify(err.response?.data)}`
+      );
+    } catch (emailErr) {
+      console.error('Failed to send error email:', emailErr.message);
+    }
+  } finally {
+    await redisClient.disconnect();
   }
+
   console.log('Done.');
 }
 

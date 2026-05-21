@@ -19,6 +19,7 @@ app.get('/create-app', async (req, res) => {
         displayName: 'ST Battery Monitor',
         description: 'Battery and offline monitoring',
         appType: 'API_ONLY',
+				 classifications: ['AUTOMATION'],
         apiOnly: {
           subscription: {
             targetUrl: REDIRECT_URI

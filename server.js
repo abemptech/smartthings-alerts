@@ -93,7 +93,32 @@ app.get('/', (req, res) => {
     <p><a href="/auth">Step 2: Authorize (after adding Client ID to env vars)</a></p>
   `);
 });
-
+app.get('/test-token', async (req, res) => {
+  const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+  const CLIENT_ID = process.env.ST_CLIENT_ID;
+  const CLIENT_SECRET = process.env.ST_CLIENT_SECRET;
+  
+  try {
+    const response = await axios.post(
+      'https://api.smartthings.com/oauth/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: REFRESH_TOKEN,
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`
+        }
+      }
+    );
+    res.json({ success: true, access_token: response.data.access_token });
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

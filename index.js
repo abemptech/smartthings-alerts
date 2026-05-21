@@ -195,14 +195,14 @@ async function main() {
       await checkLocation(location, accessToken);
       await sleep(1000);
     }
-  } catch (err) {
+} catch (err) {
     console.error('Failed to get access token:', err.message);
+    console.error('Response data:', JSON.stringify(err.response?.data));
     await sendEmail(
       'SmartThings Alert - Authentication Error',
-      `Failed to get access token: ${err.message}\n\nPlease check your OAuth credentials.`
+      `Failed to get access token: ${err.message}\n\n${JSON.stringify(err.response?.data)}`
     );
   }
-  
   console.log('Done.');
 }
 

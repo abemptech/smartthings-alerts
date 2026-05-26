@@ -7,7 +7,7 @@ const ST_CLIENT_SECRET = process.env.ST_CLIENT_SECRET;
 const ALERT_EMAIL = process.env.ALERT_EMAIL;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
-const BATTERY_THRESHOLD = 20;
+const BATTERY_THRESHOLD = 26;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

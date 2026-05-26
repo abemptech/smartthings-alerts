@@ -80,9 +80,15 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-async function getAccessToken(redisClient) {
-  const refreshToken = await redisClient.get('refresh_token');
-  console.log('Using refresh token from Redis:', refreshToken?.substring(0, 8) + '...');
+async function getAccessToken(redisClient, locationId) {
+  const refreshToken = await redisClient.get(`refresh_token:${locationId}`);
+
+  if (!refreshToken) {
+    console.log(`No refresh token found for location ${locationId} — skipping`);
+    return null;
+  }
+
+  console.log(`Using refresh token for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
 
   const response = await axios.post(
     'https://api.smartthings.com/oauth/token',
@@ -101,8 +107,8 @@ async function getAccessToken(redisClient) {
   );
 
   const newRefreshToken = response.data.refresh_token;
-  await redisClient.set('refresh_token', newRefreshToken);
-  console.log('New refresh token saved to Redis');
+  await redisClient.set(`refresh_token:${locationId}`, newRefreshToken);
+  console.log(`New refresh token saved for location ${locationId}`);
 
   return response.data.access_token;
 }
@@ -118,19 +124,35 @@ async function sendEmail(subject, body) {
   console.log(`Email sent: ${subject}`);
 }
 
-async function checkLocation(location, accessToken) {
+async function checkLocation(location, redisClient) {
   console.log(`Checking location: ${location.name}`);
 
-  const devicesResponse = await axios.get(
-    'https://api.smartthings.com/v1/devices',
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      params: { locationId: location.id }
-    }
-  );
+  let accessToken;
+  try {
+    accessToken = await getAccessToken(redisClient, location.id);
+  } catch (err) {
+    console.log(`Failed to get token for ${location.name}: ${err.message}`);
+    return;
+  }
 
-  const devices = devicesResponse.data.items;
-  console.log(`Found ${devices.length} devices at ${location.name}`);
+  if (!accessToken) return;
+
+  let devices;
+  try {
+    const devicesResponse = await axios.get(
+      'https://api.smartthings.com/v1/devices',
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { locationId: location.id }
+      }
+    );
+    devices = devicesResponse.data.items;
+    console.log(`Found ${devices.length} devices at ${location.name}`);
+  } catch (err) {
+    console.log(`Failed to get devices for ${location.name}: ${err.message}`);
+    return;
+  }
+
   const lowBatteryDevices = [];
   const offlineDevices = [];
   const offlineHubs = [];
@@ -149,10 +171,10 @@ async function checkLocation(location, accessToken) {
 
       if (state === 'OFFLINE') {
         if (device.type === 'HUB') {
-          console.log(`Hub offline detected: ${device.label} at ${location.name}`);
+          console.log(`Hub offline: ${device.label} at ${location.name}`);
           offlineHubs.push({ name: device.label, since: lastUpdated });
         } else {
-          console.log(`Device offline detected: ${device.label} at ${location.name}`);
+          console.log(`Device offline: ${device.label} at ${location.name}`);
           offlineDevices.push({ name: device.label, since: lastUpdated });
         }
       }
@@ -166,7 +188,7 @@ async function checkLocation(location, accessToken) {
         );
         const batteryValue = statusResponse.data.components?.main?.battery?.battery?.value;
         if (batteryValue !== null && batteryValue !== undefined && batteryValue < BATTERY_THRESHOLD) {
-          console.log(`Low battery detected: ${device.label} at ${location.name}: ${batteryValue}%`);
+          console.log(`Low battery: ${device.label} at ${location.name}: ${batteryValue}%`);
           lowBatteryDevices.push({ name: device.label, battery: batteryValue });
         }
       }
@@ -205,20 +227,16 @@ async function main() {
   await redisClient.connect();
 
   try {
-    const accessToken = await getAccessToken(redisClient);
-    console.log('Access token obtained successfully');
-
     for (const location of LOCATIONS) {
-      await checkLocation(location, accessToken);
+      await checkLocation(location, redisClient);
       await sleep(1000);
     }
   } catch (err) {
-    console.error('Failed to get access token:', err.message);
-    console.error('Response data:', JSON.stringify(err.response?.data));
+    console.error('Unexpected error:', err.message);
     try {
       await sendEmail(
-        'SmartThings Alert - Authentication Error',
-        `Failed to get access token: ${err.message}\n\n${JSON.stringify(err.response?.data)}`
+        'SmartThings Alert - Unexpected Error',
+        `An unexpected error occurred: ${err.message}`
       );
     } catch (emailErr) {
       console.error('Failed to send error email:', emailErr.message);

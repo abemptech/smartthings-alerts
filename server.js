@@ -17,7 +17,20 @@ async function getRedisClient() {
   return client;
 }
 
-// Check current token in Redis
+// Check all tokens in Redis
+app.get('/check-tokens', async (req, res) => {
+  const client = await getRedisClient();
+  const keys = await client.keys('refresh_token:*');
+  const results = {};
+  for (const key of keys) {
+    const token = await client.get(key);
+    results[key] = token?.substring(0, 8) + '...';
+  }
+  await client.disconnect();
+  res.json({ count: keys.length, tokens: results });
+});
+
+// Check single token
 app.get('/check-token', async (req, res) => {
   const client = await getRedisClient();
   const token = await client.get('refresh_token');
@@ -25,7 +38,7 @@ app.get('/check-token', async (req, res) => {
   res.send(`Current refresh token in Redis: ${token}`);
 });
 
-// Seed token into Redis
+// Seed token into Redis manually
 app.get('/seed-token', async (req, res) => {
   const token = req.query.token;
   if (!token) {
@@ -60,7 +73,6 @@ app.get('/test-token', async (req, res) => {
       }
     );
 
-    // Save new refresh token to Redis
     const client2 = await getRedisClient();
     await client2.set('refresh_token', response.data.refresh_token);
     await client2.disconnect();
@@ -107,7 +119,7 @@ app.get('/create-app', async (req, res) => {
   }
 });
 
-// Handle OAuth callback - auto seeds Redis with new refresh token
+// Handle OAuth callback - auto saves token to Redis keyed by location
 app.get('/callback', async (req, res) => {
   const { code } = req.query;
 
@@ -131,16 +143,28 @@ app.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token } = response.data;
 
-    // Auto save to Redis
+    // Find out which location this token has access to
+    const locationsResponse = await axios.get(
+      'https://api.smartthings.com/v1/locations',
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    const locations = locationsResponse.data.items;
+
+    // Store refresh token keyed by location ID in Redis
     const client = await getRedisClient();
-    await client.set('refresh_token', refresh_token);
+    for (const location of locations) {
+      await client.set(`refresh_token:${location.locationId}`, refresh_token);
+    }
     await client.disconnect();
 
     res.send(`
       <h1>Success!</h1>
-      <p><strong>Refresh Token saved to Redis automatically!</strong></p>
-      <p>Access Token: ${access_token}</p>
-      <p>Refresh Token: ${refresh_token}</p>
+      <p><strong>Locations authorized (${locations.length}):</strong></p>
+      <ul>${locations.map(l => `<li>${l.name} (${l.locationId})</li>`).join('')}</ul>
+      <p>Refresh token stored in Redis for each location above.</p>
+      <br>
+      <a href="/auth" style="font-size:20px;padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">Authorize Next Location</a>
     `);
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
@@ -155,8 +179,8 @@ app.get('/auth', (req, res) => {
 app.get('/', (req, res) => {
   res.send(`
     <h1>SmartThings OAuth Setup</h1>
-    <p><a href="/auth">Authorize SmartThings (saves token to Redis automatically)</a></p>
-    <p><a href="/check-token">Check current token in Redis</a></p>
+    <p><a href="/auth">Authorize a Location</a></p>
+    <p><a href="/check-tokens">Check all authorized locations</a></p>
     <p><a href="/test-token">Test token refresh</a></p>
   `);
 });

@@ -108,12 +108,14 @@ async function getAccessToken(redisClient) {
 }
 
 async function sendEmail(subject, body) {
+  console.log(`Sending email: ${subject}`);
   await transporter.sendMail({
     from: GMAIL_USER,
     to: ALERT_EMAIL,
     subject,
     text: body
   });
+  console.log(`Email sent: ${subject}`);
 }
 
 async function checkLocation(location, accessToken) {
@@ -128,6 +130,7 @@ async function checkLocation(location, accessToken) {
   );
 
   const devices = devicesResponse.data.items;
+  console.log(`Found ${devices.length} devices at ${location.name}`);
   const lowBatteryDevices = [];
   const offlineDevices = [];
   const offlineHubs = [];
@@ -146,8 +149,10 @@ async function checkLocation(location, accessToken) {
 
       if (state === 'OFFLINE') {
         if (device.type === 'HUB') {
+          console.log(`Hub offline detected: ${device.label} at ${location.name}`);
           offlineHubs.push({ name: device.label, since: lastUpdated });
         } else {
+          console.log(`Device offline detected: ${device.label} at ${location.name}`);
           offlineDevices.push({ name: device.label, since: lastUpdated });
         }
       }
@@ -161,6 +166,7 @@ async function checkLocation(location, accessToken) {
         );
         const batteryValue = statusResponse.data.components?.main?.battery?.battery?.value;
         if (batteryValue !== null && batteryValue !== undefined && batteryValue < BATTERY_THRESHOLD) {
+          console.log(`Low battery detected: ${device.label} at ${location.name}: ${batteryValue}%`);
           lowBatteryDevices.push({ name: device.label, battery: batteryValue });
         }
       }

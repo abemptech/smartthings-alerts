@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { createClient } from 'redis';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,16 +11,44 @@ const REDIRECT_URI = process.env.REDIRECT_URI;
 
 app.use(express.json());
 
-// Test token refresh
-app.get('/test-token', async (req, res) => {
-  const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+async function getRedisClient() {
+  const client = createClient({ url: process.env.REDIS_URL });
+  await client.connect();
+  return client;
+}
 
+// Check current token in Redis
+app.get('/check-token', async (req, res) => {
+  const client = await getRedisClient();
+  const token = await client.get('refresh_token');
+  await client.disconnect();
+  res.send(`Current refresh token in Redis: ${token}`);
+});
+
+// Seed token into Redis
+app.get('/seed-token', async (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    return res.send('Please provide a token: /seed-token?token=YOUR_TOKEN');
+  }
+  const client = await getRedisClient();
+  await client.set('refresh_token', token);
+  await client.disconnect();
+  res.send(`Refresh token stored in Redis: ${token.substring(0, 8)}...`);
+});
+
+// Test token refresh using Redis
+app.get('/test-token', async (req, res) => {
   try {
+    const client = await getRedisClient();
+    const refreshToken = await client.get('refresh_token');
+    await client.disconnect();
+
     const response = await axios.post(
       'https://api.smartthings.com/oauth/token',
       new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: REFRESH_TOKEN,
+        refresh_token: refreshToken,
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET
       }),
@@ -30,6 +59,12 @@ app.get('/test-token', async (req, res) => {
         }
       }
     );
+
+    // Save new refresh token to Redis
+    const client2 = await getRedisClient();
+    await client2.set('refresh_token', response.data.refresh_token);
+    await client2.disconnect();
+
     res.json({ success: true, access_token: response.data.access_token });
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
@@ -72,7 +107,7 @@ app.get('/create-app', async (req, res) => {
   }
 });
 
-// Handle OAuth callback
+// Handle OAuth callback - auto seeds Redis with new refresh token
 app.get('/callback', async (req, res) => {
   const { code } = req.query;
 
@@ -95,11 +130,17 @@ app.get('/callback', async (req, res) => {
     );
 
     const { access_token, refresh_token } = response.data;
+
+    // Auto save to Redis
+    const client = await getRedisClient();
+    await client.set('refresh_token', refresh_token);
+    await client.disconnect();
+
     res.send(`
       <h1>Success!</h1>
-      <p><strong>Access Token:</strong> ${access_token}</p>
-      <p><strong>Refresh Token:</strong> ${refresh_token}</p>
-      <p>Copy the Refresh Token and add it as REFRESH_TOKEN in your Render cron job environment variables.</p>
+      <p><strong>Refresh Token saved to Redis automatically!</strong></p>
+      <p>Access Token: ${access_token}</p>
+      <p>Refresh Token: ${refresh_token}</p>
     `);
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
@@ -114,28 +155,12 @@ app.get('/auth', (req, res) => {
 app.get('/', (req, res) => {
   res.send(`
     <h1>SmartThings OAuth Setup</h1>
-    <p><a href="/create-app">Step 1: Create OAuth App</a></p>
-    <p><a href="/auth">Step 2: Authorize (after adding Client ID to env vars)</a></p>
-    <p><a href="/test-token">Test Token Refresh</a></p>
+    <p><a href="/auth">Authorize SmartThings (saves token to Redis automatically)</a></p>
+    <p><a href="/check-token">Check current token in Redis</a></p>
+    <p><a href="/test-token">Test token refresh</a></p>
   `);
 });
-app.get('/seed-token', async (req, res) => {
-  const { createClient } = await import('redis');
-  const client = createClient({ url: process.env.REDIS_URL });
-  await client.connect();
-  await client.set('refresh_token', '5b60ad68-396e-408d-8dbb-353885e5c513');
-  await client.disconnect();
-  res.send('Refresh token stored in Redis successfully!');
-});
-app.get('/check-token', async (req, res) => {
-  const { createClient } = await import('redis');
-  const client = createClient({ url: process.env.REDIS_URL });
-  await client.connect();
-  const token = await client.get('refresh_token');
-  await client.disconnect();
-  res.send(`Current refresh token in Redis: ${token}`);
-});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-

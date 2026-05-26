@@ -127,9 +127,6 @@ app.get('/seed-token', async (req, res) => {
   await client.disconnect();
   res.send('Refresh token stored in Redis successfully!');
 });
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
 app.get('/check-token', async (req, res) => {
   const { createClient } = await import('redis');
   const client = createClient({ url: process.env.REDIS_URL });
@@ -138,3 +135,7 @@ app.get('/check-token', async (req, res) => {
   await client.disconnect();
   res.send(`Current refresh token in Redis: ${token}`);
 });
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+

@@ -74,6 +74,7 @@ const LOCATIONS = [
   { id: '28bdd455-4694-44f8-b337-c085fd5af99c', name: 'Woodland' },
   { id: '9d6b8309-ebd6-407c-81f8-5430df3e2a4c', name: 'Starr Unit 1' },
   { id: 'c77c11e7-53be-4693-92e8-8ef0985b5673', name: 'Starr 2' },
+  { id: '3a4b4d2f-a8c2-499d-b596-b262185f1170', name: 'Greenview' },
 ];
 
 const transporter = nodemailer.createTransport({

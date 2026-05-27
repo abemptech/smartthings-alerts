@@ -59,6 +59,7 @@ app.get('/regenerate-oauth/:appId', async (req, res) => {
 // Update app OAuth settings
 app.get('/update-app/:appId/:appNum', async (req, res) => {
   const { appId, appNum } = req.params;
+  const token = req.query.token || process.env.TEMP_PAT;
   try {
     const response = await axios.put(
       `https://api.smartthings.com/v1/apps/${appId}/oauth`,
@@ -69,7 +70,7 @@ app.get('/update-app/:appId/:appNum', async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.TEMP_PAT}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       }
@@ -78,6 +79,7 @@ app.get('/update-app/:appId/:appNum', async (req, res) => {
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
   }
+});
 });
 
 // Check app details

@@ -11,7 +11,9 @@ const APPS = {
   '1': { clientId: process.env.ST_CLIENT_ID, clientSecret: process.env.ST_CLIENT_SECRET },
   '2': { clientId: process.env.ST_CLIENT_ID_2, clientSecret: process.env.ST_CLIENT_SECRET_2 },
   '3': { clientId: process.env.ST_CLIENT_ID_3, clientSecret: process.env.ST_CLIENT_SECRET_3 }
+  '4': { clientId: process.env.ST_CLIENT_ID_4, clientSecret: process.env.ST_CLIENT_SECRET_4 }
 };
+
 
 app.use(express.json());
 

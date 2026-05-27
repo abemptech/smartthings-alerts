@@ -341,6 +341,20 @@ app.get('/list-apps', async (req, res) => {
     res.json({ error: err.message, details: err.response?.data });
   }
 });
+app.get('/regenerate-oauth/:appId', async (req, res) => {
+  const { appId } = req.params;
+  const token = req.query.token || process.env.TEMP_PAT;
+  try {
+    const response = await axios.post(
+      `https://api.smartthings.com/v1/apps/${appId}/oauth/generate`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

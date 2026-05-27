@@ -14,7 +14,6 @@ const APPS = {
   '4': { clientId: process.env.ST_CLIENT_ID_4, clientSecret: process.env.ST_CLIENT_SECRET_4 }
 };
 
-
 app.use(express.json());
 
 async function getRedisClient() {
@@ -23,11 +22,42 @@ async function getRedisClient() {
   return client;
 }
 
+// List apps for a given token
+app.get('/list-apps', async (req, res) => {
+  const token = req.query.token || process.env.TEMP_PAT;
+  try {
+    const response = await axios.get(
+      'https://api.smartthings.com/v1/apps',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
+
+// Regenerate OAuth credentials for an app
+app.get('/regenerate-oauth/:appId', async (req, res) => {
+  const { appId } = req.params;
+  const token = req.query.token || process.env.TEMP_PAT;
+  try {
+    const response = await axios.post(
+      `https://api.smartthings.com/v1/apps/${appId}/oauth/generate`,
+      {
+        clientName: 'ST Monitor Greenview',
+        scope: ['r:devices:*', 'r:locations:*']
+      },
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
+
 // Update app OAuth settings
 app.get('/update-app/:appId/:appNum', async (req, res) => {
   const { appId, appNum } = req.params;
-  const TEMP_PAT = process.env.TEMP_PAT;
-  const appCreds = APPS[appNum];
   try {
     const response = await axios.put(
       `https://api.smartthings.com/v1/apps/${appId}/oauth`,
@@ -37,10 +67,10 @@ app.get('/update-app/:appId/:appNum', async (req, res) => {
         redirectUris: ['https://smartthings-oauth.onrender.com/callback']
       },
       {
-headers: {
-  Authorization: `Bearer ${process.env.TEMP_PAT}`,
-  'Content-Type': 'application/json'
-}
+        headers: {
+          Authorization: `Bearer ${process.env.TEMP_PAT}`,
+          'Content-Type': 'application/json'
+        }
       }
     );
     res.json(response.data);
@@ -218,7 +248,8 @@ app.get('/callback', async (req, res) => {
       <br>
       <a href="/auth?app=${appNum}" style="font-size:20px;padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;margin-right:10px;">Authorize Another with App ${appNum}</a>
       <a href="/auth?app=2" style="font-size:20px;padding:10px;background:blue;color:white;text-decoration:none;border-radius:5px;margin-right:10px;">Switch to App 2</a>
-      <a href="/auth?app=3" style="font-size:20px;padding:10px;background:purple;color:white;text-decoration:none;border-radius:5px;">Switch to App 3</a>
+      <a href="/auth?app=3" style="font-size:20px;padding:10px;background:purple;color:white;text-decoration:none;border-radius:5px;margin-right:10px;">Switch to App 3</a>
+      <a href="/auth?app=4" style="font-size:20px;padding:10px;background:orange;color:white;text-decoration:none;border-radius:5px;">Switch to App 4</a>
     `);
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
@@ -237,20 +268,7 @@ app.get('/auth', (req, res) => {
   res.redirect(authUrl);
 });
 
-app.get('/', (req, res) => {
-  res.send(`
-    <h1>SmartThings OAuth Setup</h1>
-    <p><a href="/auth?app=1">Authorize with App 1 (locations 1-20)</a></p>
-    <p><a href="/auth?app=2">Authorize with App 2 (locations 21-40)</a></p>
-    <p><a href="/auth?app=3">Authorize with App 3 (locations 41-57)</a></p>
-    <p><a href="/check-tokens">Check all authorized locations</a></p>
-    <p><a href="/check-app/8a15fcc1-d53e-4c44-8100-b6a94bbff086">Check App 2 details</a></p>
-    <p><a href="/check-app/bfac25ff-9b38-437b-b1b9-1b3916c33f29">Check App 3 details</a></p>
-    <p><a href="/update-app/8a15fcc1-d53e-4c44-8100-b6a94bbff086/2">Update App 2 redirect URI</a></p>
-    <p><a href="/update-app/bfac25ff-9b38-437b-b1b9-1b3916c33f29/3">Update App 3 redirect URI</a></p>
-  `);
-});
-
+// Check authorized locations with names
 app.get('/check-authorized', async (req, res) => {
   const client = await getRedisClient();
   const keys = await client.keys('refresh_token:*');
@@ -329,31 +347,17 @@ app.get('/check-authorized', async (req, res) => {
     <ul>${notAuthorized.map(l => `<li>${l.name}</li>`).join('')}</ul>
   `);
 });
-app.get('/list-apps', async (req, res) => {
-  const token = req.query.token || process.env.TEMP_PAT;
-  try {
-    const response = await axios.get(
-      'https://api.smartthings.com/v1/apps',
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    res.json(response.data);
-  } catch (err) {
-    res.json({ error: err.message, details: err.response?.data });
-  }
-});
-app.get('/regenerate-oauth/:appId', async (req, res) => {
-  const { appId } = req.params;
-  const token = req.query.token || process.env.TEMP_PAT;
-  try {
-    const response = await axios.post(
-      `https://api.smartthings.com/v1/apps/${appId}/oauth/generate`,
-      {},
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    res.json(response.data);
-  } catch (err) {
-    res.json({ error: err.message, details: err.response?.data });
-  }
+
+app.get('/', (req, res) => {
+  res.send(`
+    <h1>SmartThings OAuth Setup</h1>
+    <p><a href="/auth?app=1">Authorize with App 1 (full)</a></p>
+    <p><a href="/auth?app=2">Authorize with App 2</a></p>
+    <p><a href="/auth?app=3">Authorize with App 3</a></p>
+    <p><a href="/auth?app=4">Authorize with App 4</a></p>
+    <p><a href="/check-authorized">Check authorized locations</a></p>
+    <p><a href="/check-tokens">Check all tokens in Redis</a></p>
+  `);
 });
 
 app.listen(PORT, () => {

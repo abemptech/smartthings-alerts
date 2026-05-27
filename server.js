@@ -36,7 +36,7 @@ app.get('/update-app/:appId/:appNum', async (req, res) => {
       },
       {
 headers: {
-  Authorization: `Basic ${Buffer.from(`${appCreds.clientId}:${appCreds.clientSecret}`).toString('base64')}`,
+  Authorization: `Bearer ${process.env.TEMP_PAT}`,
   'Content-Type': 'application/json'
 }
       }

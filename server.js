@@ -329,6 +329,18 @@ app.get('/check-authorized', async (req, res) => {
     <ul>${notAuthorized.map(l => `<li>${l.name}</li>`).join('')}</ul>
   `);
 });
+app.get('/list-apps', async (req, res) => {
+  const token = req.query.token || process.env.TEMP_PAT;
+  try {
+    const response = await axios.get(
+      'https://api.smartthings.com/v1/apps',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

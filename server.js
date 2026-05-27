@@ -21,6 +21,33 @@ async function getRedisClient() {
   return client;
 }
 
+// Update app OAuth settings
+app.get('/update-app/:appId/:appNum', async (req, res) => {
+  const { appId, appNum } = req.params;
+  const TEMP_PAT = process.env.TEMP_PAT;
+  const appCreds = APPS[appNum];
+  try {
+    const response = await axios.put(
+      `https://api.smartthings.com/v1/apps/${appId}/oauth`,
+      {
+        clientName: `ST Monitor ${appNum}`,
+        scope: ['r:devices:*', 'r:locations:*'],
+        redirectUris: ['https://smartthings-oauth.onrender.com/callback']
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${TEMP_PAT}`,
+          'Content-Type': 'application/json',
+          'Authorization-Extra': `Basic ${Buffer.from(`${appCreds.clientId}:${appCreds.clientSecret}`).toString('base64')}`
+        }
+      }
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
+
 // Check app details
 app.get('/check-app/:appId', async (req, res) => {
   const { appId } = req.params;
@@ -168,7 +195,6 @@ app.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token } = response.data;
 
-    // Find out which location this token has access to
     const locationsResponse = await axios.get(
       'https://api.smartthings.com/v1/locations',
       { headers: { Authorization: `Bearer ${access_token}` } }
@@ -176,7 +202,6 @@ app.get('/callback', async (req, res) => {
 
     const locations = locationsResponse.data.items;
 
-    // Store refresh token and app number keyed by location ID in Redis
     const client = await getRedisClient();
     for (const location of locations) {
       await client.set(`refresh_token:${location.locationId}`, refresh_token);
@@ -220,6 +245,8 @@ app.get('/', (req, res) => {
     <p><a href="/check-tokens">Check all authorized locations</a></p>
     <p><a href="/check-app/8a15fcc1-d53e-4c44-8100-b6a94bbff086">Check App 2 details</a></p>
     <p><a href="/check-app/bfac25ff-9b38-437b-b1b9-1b3916c33f29">Check App 3 details</a></p>
+    <p><a href="/update-app/8a15fcc1-d53e-4c44-8100-b6a94bbff086/2">Update App 2 redirect URI</a></p>
+    <p><a href="/update-app/bfac25ff-9b38-437b-b1b9-1b3916c33f29/3">Update App 3 redirect URI</a></p>
   `);
 });
 

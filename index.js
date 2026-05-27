@@ -4,6 +4,10 @@ import { createClient } from 'redis';
 
 const ST_CLIENT_ID = process.env.ST_CLIENT_ID;
 const ST_CLIENT_SECRET = process.env.ST_CLIENT_SECRET;
+const ST_CLIENT_ID_2 = process.env.ST_CLIENT_ID_2;
+const ST_CLIENT_SECRET_2 = process.env.ST_CLIENT_SECRET_2;
+const ST_CLIENT_ID_3 = process.env.ST_CLIENT_ID_3;
+const ST_CLIENT_SECRET_3 = process.env.ST_CLIENT_SECRET_3;
 const ALERT_EMAIL = process.env.ALERT_EMAIL;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
@@ -82,26 +86,34 @@ const transporter = nodemailer.createTransport({
 
 async function getAccessToken(redisClient, locationId) {
   const refreshToken = await redisClient.get(`refresh_token:${locationId}`);
+  const appNum = await redisClient.get(`app_num:${locationId}`) || '1';
 
   if (!refreshToken) {
     console.log(`No refresh token found for location ${locationId} — skipping`);
     return null;
   }
 
-  console.log(`Using refresh token for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
+  const clientId = appNum === '2' ? ST_CLIENT_ID_2 :
+                   appNum === '3' ? ST_CLIENT_ID_3 :
+                   ST_CLIENT_ID;
+  const clientSecret = appNum === '2' ? ST_CLIENT_SECRET_2 :
+                       appNum === '3' ? ST_CLIENT_SECRET_3 :
+                       ST_CLIENT_SECRET;
+
+  console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
 
   const response = await axios.post(
     'https://api.smartthings.com/oauth/token',
     new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-      client_id: ST_CLIENT_ID,
-      client_secret: ST_CLIENT_SECRET
+      client_id: clientId,
+      client_secret: clientSecret
     }),
     {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${ST_CLIENT_ID}:${ST_CLIENT_SECRET}`).toString('base64')}`
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
       }
     }
   );

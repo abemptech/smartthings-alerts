@@ -35,11 +35,10 @@ app.get('/update-app/:appId/:appNum', async (req, res) => {
         redirectUris: ['https://smartthings-oauth.onrender.com/callback']
       },
       {
-        headers: {
-          Authorization: `Bearer ${TEMP_PAT}`,
-          'Content-Type': 'application/json',
-          'Authorization-Extra': `Basic ${Buffer.from(`${appCreds.clientId}:${appCreds.clientSecret}`).toString('base64')}`
-        }
+headers: {
+  Authorization: `Basic ${Buffer.from(`${appCreds.clientId}:${appCreds.clientSecret}`).toString('base64')}`,
+  'Content-Type': 'application/json'
+}
       }
     );
     res.json(response.data);

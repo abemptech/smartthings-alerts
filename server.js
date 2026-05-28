@@ -77,23 +77,18 @@ app.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token } = response.data;
 
-    const client = await getRedisClient();
-    const tempKey = `pending:${Date.now()}`;
-    await client.set(tempKey, JSON.stringify({ access_token, refresh_token, appNum }));
-    await client.disconnect();
-
     res.send(`
-      <h1>Token received! (App ${appNum})</h1>
-      <p>Token saved temporarily.</p>
+      <h1>Success! (App ${appNum})</h1>
+      <p><strong>Access Token:</strong> ${access_token}</p>
+      <p><strong>Refresh Token:</strong> ${refresh_token}</p>
+      <p><strong>App:</strong> ${appNum}</p>
       <br>
-      <a href="/auth?app=${appNum}" style="font-size:20px;padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;margin-right:10px;">Authorize Next Location</a>
-      <a href="/process-pending" style="font-size:20px;padding:10px;background:red;color:white;text-decoration:none;border-radius:5px;">Process All Pending Tokens</a>
+      <a href="/auth?app=${appNum}" style="font-size:20px;padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">Authorize Next Location</a>
     `);
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
   }
 });
-
 // Process pending tokens - looks up locations and saves to Redis
 app.get('/process-pending', async (req, res) => {
   const client = await getRedisClient();

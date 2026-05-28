@@ -424,7 +424,45 @@ app.get('/check-app/:appId', async (req, res) => {
     res.json({ error: err.message, details: err.response?.data });
   }
 });
+app.get('/list-installs/:appId', async (req, res) => {
+  const { appId } = req.params;
+  const token = req.query.token || process.env.TEMP_PAT;
+  try {
+    const response = await axios.get(
+      `https://api.smartthings.com/v1/installedapps?appId=${appId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
 
+app.get('/delete-installs/:appId', async (req, res) => {
+  const { appId } = req.params;
+  const token = req.query.token || process.env.TEMP_PAT;
+  try {
+    const listResponse = await axios.get(
+      `https://api.smartthings.com/v1/installedapps?appId=${appId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    const installs = listResponse.data.items;
+    let deleted = 0;
+    
+    for (const install of installs) {
+      await axios.delete(
+        `https://api.smartthings.com/v1/installedapps/${install.installedAppId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      deleted++;
+    }
+    
+    res.json({ deleted, total: installs.length });
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

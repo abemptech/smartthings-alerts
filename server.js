@@ -1,6 +1,7 @@
 import express from 'express';
 import axios from 'axios';
 import { createClient } from 'redis';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,14 @@ async function getRedisClient() {
   return client;
 }
 
+function generateCodeVerifier() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function generateCodeChallenge(verifier) {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
+
 // Home page
 app.get('/', (req, res) => {
   res.send(`
@@ -41,16 +50,24 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Auth redirect
-app.get('/auth', (req, res) => {
+// Auth redirect with PKCE
+app.get('/auth', async (req, res) => {
   const appNum = req.query.app || '1';
   const appCreds = APPS[appNum];
   if (!appCreds) return res.send('Invalid app number');
-  const authUrl = `https://api.smartthings.com/oauth/authorize?response_type=code&client_id=${appCreds.clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=r:devices:*+r:locations:*&state=${appNum}`;
+
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+
+  const client = await getRedisClient();
+  await client.set(`code_verifier:${appNum}`, codeVerifier, { EX: 300 });
+  await client.disconnect();
+
+  const authUrl = `https://api.smartthings.com/oauth/authorize?response_type=code&client_id=${appCreds.clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=r:devices:*+r:locations:*&state=${appNum}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
   res.redirect(authUrl);
 });
 
-// OAuth callback - fast, stores token temporarily
+// OAuth callback with PKCE
 app.get('/callback', async (req, res) => {
   const { code, state } = req.query;
   const appNum = state || '1';
@@ -58,14 +75,19 @@ app.get('/callback', async (req, res) => {
   if (!appCreds) return res.send('Invalid app number in state parameter');
 
   try {
+    const client = await getRedisClient();
+    const codeVerifier = await client.get(`code_verifier:${appNum}`);
+    await client.disconnect();
+
     const response = await axios.post(
-'https://api.smartthings.com/v1/oauth/token',
+      'https://api.smartthings.com/oauth/token',
       new URLSearchParams({
         grant_type: 'authorization_code',
         code,
         client_id: appCreds.clientId,
         client_secret: appCreds.clientSecret,
-        redirect_uri: REDIRECT_URI
+        redirect_uri: REDIRECT_URI,
+        code_verifier: codeVerifier
       }),
       {
         headers: {
@@ -77,19 +99,25 @@ app.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token } = response.data;
 
+    // Store temporarily in Redis
+    const client2 = await getRedisClient();
+    const tempKey = `pending:${Date.now()}`;
+    await client2.set(tempKey, JSON.stringify({ access_token, refresh_token, appNum }));
+    await client2.disconnect();
+
     res.send(`
       <h1>Success! (App ${appNum})</h1>
-      <p><strong>Access Token:</strong> ${access_token}</p>
-      <p><strong>Refresh Token:</strong> ${refresh_token}</p>
-      <p><strong>App:</strong> ${appNum}</p>
+      <p>Token saved successfully.</p>
       <br>
-      <a href="/auth?app=${appNum}" style="font-size:20px;padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">Authorize Next Location</a>
+      <a href="/auth?app=${appNum}" style="font-size:20px;padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;margin-right:10px;">Authorize Next Location</a>
+      <a href="/process-pending" style="font-size:20px;padding:10px;background:red;color:white;text-decoration:none;border-radius:5px;">Process All Pending Tokens</a>
     `);
   } catch (err) {
     res.json({ error: err.message, details: err.response?.data });
   }
 });
-// Process pending tokens - looks up locations and saves to Redis
+
+// Process pending tokens
 app.get('/process-pending', async (req, res) => {
   const client = await getRedisClient();
   const keys = await client.keys('pending:*');

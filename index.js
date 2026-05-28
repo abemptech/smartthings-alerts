@@ -60,6 +60,7 @@ const LOCATIONS = [
   { id: 'bb0cf14f-0cee-4974-be69-91935cfe4f93', name: 'Seminole' },
   { id: 'eaf0b7fb-d07a-423d-a27e-4c4b187fbab2', name: 'Shep 25-6' },
   { id: '10e0e6b5-5253-49a6-9d77-f9daed7aa3ca', name: 'Shep 9-2' },
+  { id: '38df531d-1dbd-4720-9fac-89181dab2eed', name: 'SmithRidge' },
   { id: '805b9a63-33af-4aaf-bc7e-e3631888b114', name: 'Sheffield 1' },
   { id: '6e5934fe-fba5-4f7a-84ed-c6bf5bde5215', name: 'Sheffield 2' },
   { id: 'e059dac6-5d5e-4497-8372-c6350776d401', name: 'Sunrise' },

@@ -8,6 +8,10 @@ const ST_CLIENT_ID_2 = process.env.ST_CLIENT_ID_2;
 const ST_CLIENT_SECRET_2 = process.env.ST_CLIENT_SECRET_2;
 const ST_CLIENT_ID_3 = process.env.ST_CLIENT_ID_3;
 const ST_CLIENT_SECRET_3 = process.env.ST_CLIENT_SECRET_3;
+const ST_CLIENT_ID_4 = process.env.ST_CLIENT_ID_4;
+const ST_CLIENT_SECRET_4 = process.env.ST_CLIENT_SECRET_4;
+const ST_CLIENT_ID_GV = process.env.ST_CLIENT_ID_GV;
+const ST_CLIENT_SECRET_GV = process.env.ST_CLIENT_SECRET_GV;
 const ALERT_EMAIL = process.env.ALERT_EMAIL;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
@@ -40,6 +44,7 @@ const LOCATIONS = [
   { id: 'f9153f09-099b-4dee-b3c7-8bacff45be15', name: 'Dodgingtown' },
   { id: '63b4aa1b-0713-467d-9e26-71cf674ca702', name: 'Dorset' },
   { id: '75f02cd8-3bc8-4eff-ae57-d29a1a28d927', name: 'Foley' },
+  { id: '3a4b4d2f-a8c2-499d-b596-b262185f1170', name: 'Greenview' },
   { id: '271f9430-cd73-48e3-bcdd-6d17f72040a3', name: 'Howland' },
   { id: '24134771-f055-4c4a-ba65-1d81a4a60457', name: 'Hubbard' },
   { id: '3ed81f22-79d6-456d-a7d6-d1983a6fe8cf', name: 'Kelley ST Hub' },
@@ -63,6 +68,8 @@ const LOCATIONS = [
   { id: '38df531d-1dbd-4720-9fac-89181dab2eed', name: 'SmithRidge' },
   { id: '805b9a63-33af-4aaf-bc7e-e3631888b114', name: 'Sheffield 1' },
   { id: '6e5934fe-fba5-4f7a-84ed-c6bf5bde5215', name: 'Sheffield 2' },
+  { id: '9d6b8309-ebd6-407c-81f8-5430df3e2a4c', name: 'Starr Unit 1' },
+  { id: 'c77c11e7-53be-4693-92e8-8ef0985b5673', name: 'Starr 2' },
   { id: 'e059dac6-5d5e-4497-8372-c6350776d401', name: 'Sunrise' },
   { id: 'aa5e3f20-612c-44ed-b414-fe00edbfa561', name: 'Sweetcake' },
   { id: 'b7e50bb8-df96-4015-a930-40243326d060', name: 'Tamanny' },
@@ -73,9 +80,6 @@ const LOCATIONS = [
   { id: '42081546-67b6-49ca-9d7c-3d278f1a8175', name: 'West ST CT' },
   { id: '5ad318df-efe5-4f0b-b3e4-e3a5cdd339c3', name: 'Whippoorwill Hub' },
   { id: '28bdd455-4694-44f8-b337-c085fd5af99c', name: 'Woodland' },
-  { id: '9d6b8309-ebd6-407c-81f8-5430df3e2a4c', name: 'Starr Unit 1' },
-  { id: 'c77c11e7-53be-4693-92e8-8ef0985b5673', name: 'Starr 2' },
-  { id: '3a4b4d2f-a8c2-499d-b596-b262185f1170', name: 'Greenview' },
 ];
 
 const transporter = nodemailer.createTransport({
@@ -97,9 +101,13 @@ async function getAccessToken(redisClient, locationId) {
 
   const clientId = appNum === '2' ? ST_CLIENT_ID_2 :
                    appNum === '3' ? ST_CLIENT_ID_3 :
+                   appNum === '4' ? ST_CLIENT_ID_4 :
+                   appNum === 'GV' ? ST_CLIENT_ID_GV :
                    ST_CLIENT_ID;
   const clientSecret = appNum === '2' ? ST_CLIENT_SECRET_2 :
                        appNum === '3' ? ST_CLIENT_SECRET_3 :
+                       appNum === '4' ? ST_CLIENT_SECRET_4 :
+                       appNum === 'GV' ? ST_CLIENT_SECRET_GV :
                        ST_CLIENT_SECRET;
 
   console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
@@ -114,8 +122,7 @@ async function getAccessToken(redisClient, locationId) {
     }),
     {
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+        'Content-Type': 'application/x-www-form-urlencoded'
       }
     }
   );

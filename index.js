@@ -112,7 +112,7 @@ async function getAccessToken(redisClient, locationId) {
 
   console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
 
-  const response = await axios.post(
+const response = await axios.post(
     'https://api.smartthings.com/oauth/token',
     new URLSearchParams({
       grant_type: 'refresh_token',
@@ -122,7 +122,8 @@ async function getAccessToken(redisClient, locationId) {
     }),
     {
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
       }
     }
   );

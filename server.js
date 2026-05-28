@@ -363,6 +363,33 @@ app.get('/', (req, res) => {
   `);
 });
 
+app.get('/fix-app-nums', async (req, res) => {
+  const client = await getRedisClient();
+  
+  // App 1 locations (first 21 authorized)
+  const app1 = ['ab46efea-5c37-4516-8eb7-5d76ddabfaf6','cb4a3774-7b2e-4481-a8e9-0a59004d52fc','f9c658d7-d211-4006-8cf2-5507cbd0f367','e5390bfe-b369-41f2-b218-aaafbbbf8907','6b6cd665-6830-4fa5-9e86-5c4186423cf5','a24ea1c2-73d3-4f48-8a56-69a8162907ed','eb508ff8-02ad-4337-9853-c5a90b8ddf9f','bb6745cf-de29-4c73-9492-ae5119f016ea','0411cf00-fdcf-4d37-a4ed-b62757ef6c4c','f6276e7a-343f-494e-8c0b-7dc1b7303127','ff90c913-2631-4f61-bd0f-57c504cd4146','57e30a74-286f-4020-85e3-b3cb940157d2','bb800a5b-394a-467a-bab8-8ad0445d054d','a9f82d24-0124-4bca-b45b-33006e5b2c60','3e1494a5-a6e7-4f28-b192-722b3ce56297','4837b924-2210-4dc4-83b7-9a4c0364f810','52fe184e-f00c-43a6-bf5e-83364e780077','94ac1a0f-78ca-44bc-85f6-2a23a7509367','aea24347-f2eb-4011-8e24-e4f00032b9f8','727324c5-231b-4e35-8253-deca7059db1d','f9153f09-099b-4dee-b3c7-8bacff45be15'];
+
+  // GV location
+  const appGV = ['3a4b4d2f-a8c2-499d-b596-b262185f1170'];
+
+  // Everything else is App 2, 3, or 4 — we'll set them all to 2 for now
+  // then re-authorize with correct apps if needed
+  const keys = await client.keys('refresh_token:*');
+  const allIds = keys.map(k => k.replace('refresh_token:', ''));
+  
+  for (const id of allIds) {
+    if (app1.includes(id)) {
+      await client.set(`app_num:${id}`, '1');
+    } else if (appGV.includes(id)) {
+      await client.set(`app_num:${id}`, 'GV');
+    } else {
+      await client.set(`app_num:${id}`, '2');
+    }
+  }
+
+  await client.disconnect();
+  res.send('App numbers fixed! All non-App1/GV locations set to App 2. Check logs on next run.');
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -59,7 +59,7 @@ app.get('/callback', async (req, res) => {
 
   try {
     const response = await axios.post(
-      'https://api.smartthings.com/oauth/token',
+'https://api.smartthings.com/v1/oauth/token',
       new URLSearchParams({
         grant_type: 'authorization_code',
         code,

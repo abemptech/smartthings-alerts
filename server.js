@@ -70,6 +70,8 @@ app.get('/auth', async (req, res) => {
 // OAuth callback with PKCE
 app.get('/callback', async (req, res) => {
   const { code, state } = req.query;
+  console.log('Callback received:', { code: code?.substring(0, 8), state, allParams: req.query });
+  
   const appNum = state || '1';
   const appCreds = APPS[appNum];
   if (!appCreds) return res.send('Invalid app number in state parameter');
@@ -77,8 +79,8 @@ app.get('/callback', async (req, res) => {
   try {
     const client = await getRedisClient();
     const codeVerifier = await client.get(`code_verifier:${appNum}`);
+    console.log('Code verifier found:', codeVerifier ? 'yes' : 'no', codeVerifier?.substring(0, 8));
     await client.disconnect();
-
     const response = await axios.post(
       'https://api.smartthings.com/oauth/token',
       new URLSearchParams({

@@ -88,43 +88,67 @@ const transporter = nodemailer.createTransport({
 });
 
 async function getAccessToken(redisClient, locationId) {
-  const refreshToken = await redisClient.get(`refresh_token:${locationId}`);
-  const appNum = await redisClient.get(`app_num:${locationId}`) || '1';
-
-  if (!refreshToken) {
-    console.log(`No refresh token found for location ${locationId} — skipping`);
-    return null;
+  const lockKey = `lock:${locationId}`;
+  const refreshTokenKey = `refresh_token:${locationId}`;
+  
+  // Wait for lock to be released (max 10 seconds)
+  let attempts = 0;
+  while (await redisClient.get(lockKey) && attempts < 20) {
+    await sleep(500);
+    attempts++;
   }
+  
+  // Set lock
+  await redisClient.set(lockKey, '1', { EX: 30 });
+  
+  try {
+    const refreshToken = await redisClient.get(refreshTokenKey);
+    const appNum = await redisClient.get(`app_num:${locationId}`) || '1';
 
-  const clientId = appNum === '2' ? ST_CLIENT_ID_2 :
-                   appNum === '3' ? ST_CLIENT_ID_3 :
-                   appNum === '4' ? ST_CLIENT_ID_4 :
-                   appNum === 'GV' ? ST_CLIENT_ID_GV :
-                   ST_CLIENT_ID;
-  const clientSecret = appNum === '2' ? ST_CLIENT_SECRET_2 :
-                       appNum === '3' ? ST_CLIENT_SECRET_3 :
-                       appNum === '4' ? ST_CLIENT_SECRET_4 :
-                       appNum === 'GV' ? ST_CLIENT_SECRET_GV :
-                       ST_CLIENT_SECRET;
-
-  console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
-
-  const response = await axios.post(
-    'https://api.smartthings.com/oauth/token',
-    new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret
-    }),
-    {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
-      }
+    if (!refreshToken) {
+      console.log(`No refresh token found for location ${locationId} — skipping`);
+      return null;
     }
-  );
 
+    const clientId = appNum === '2' ? ST_CLIENT_ID_2 :
+                     appNum === '3' ? ST_CLIENT_ID_3 :
+                     appNum === '4' ? ST_CLIENT_ID_4 :
+                     appNum === 'GV' ? ST_CLIENT_ID_GV :
+                     ST_CLIENT_ID;
+    const clientSecret = appNum === '2' ? ST_CLIENT_SECRET_2 :
+                         appNum === '3' ? ST_CLIENT_SECRET_3 :
+                         appNum === '4' ? ST_CLIENT_SECRET_4 :
+                         appNum === 'GV' ? ST_CLIENT_SECRET_GV :
+                         ST_CLIENT_SECRET;
+
+    console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
+
+    const response = await axios.post(
+      'https://api.smartthings.com/oauth/token',
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+        }
+      }
+    );
+
+    const newRefreshToken = response.data.refresh_token;
+    await redisClient.set(refreshTokenKey, newRefreshToken);
+    console.log(`New refresh token saved for location ${locationId}`);
+
+    return response.data.access_token;
+  } finally {
+    // Release lock
+    await redisClient.del(lockKey);
+  }
+}
   const newRefreshToken = response.data.refresh_token;
   await redisClient.set(`refresh_token:${locationId}`, newRefreshToken);
   return response.data.access_token;

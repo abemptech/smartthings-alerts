@@ -463,6 +463,35 @@ app.get('/delete-installs/:appId', async (req, res) => {
     res.json({ error: err.message, details: err.response?.data });
   }
 });
+app.get('/delete-all-installs/:appId', async (req, res) => {
+  const { appId } = req.params;
+  const token = req.query.token || process.env.TEMP_PAT;
+  let deleted = 0;
+  let nextUrl = `https://api.smartthings.com/v1/installedapps?appId=${appId}`;
+  
+  try {
+    while (nextUrl) {
+      const listResponse = await axios.get(nextUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const installs = listResponse.data.items;
+      for (const install of installs) {
+        await axios.delete(
+          `https://api.smartthings.com/v1/installedapps/${install.installedAppId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        deleted++;
+      }
+      
+      nextUrl = listResponse.data._links?.next?.href || null;
+    }
+    
+    res.json({ deleted, message: 'All installs deleted' });
+  } catch (err) {
+    res.json({ error: err.message, details: err.response?.data, deleted });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

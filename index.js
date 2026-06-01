@@ -39,7 +39,6 @@ const LOCATIONS = [
   { id: 'aea24347-f2eb-4011-8e24-e4f00032b9f8', name: 'Cleveland Unit 1' },
   { id: '6b6cd665-6830-4fa5-9e86-5c4186423cf5', name: 'Cleveland Unit 3' },
   { id: '727324c5-231b-4e35-8253-deca7059db1d', name: 'Corbin' },
-  { id: '58e121db-b978-469d-b113-59112a5bf7cd', name: 'Cornell tester 2024' },
   { id: '3e1494a5-a6e7-4f28-b192-722b3ce56297', name: 'Crows Nest 4K' },
   { id: 'f9153f09-099b-4dee-b3c7-8bacff45be15', name: 'Dodgingtown' },
   { id: '63b4aa1b-0713-467d-9e26-71cf674ca702', name: 'Dorset' },
@@ -62,14 +61,12 @@ const LOCATIONS = [
   { id: '16bd4aae-c943-4126-a90b-77350e30a882', name: 'Ridge Road' },
   { id: '81af92a1-dad1-43d9-91a3-227578218c55', name: 'Ritch Drive' },
   { id: '98c19af9-71c2-4ea2-a37c-952497db5253', name: 'Saw Mill' },
-  { id: 'bb0cf14f-0cee-4974-be69-91935cfe4f93', name: 'Seminole' },
   { id: 'eaf0b7fb-d07a-423d-a27e-4c4b187fbab2', name: 'Shep 25-6' },
   { id: '10e0e6b5-5253-49a6-9d77-f9daed7aa3ca', name: 'Shep 9-2' },
   { id: '38df531d-1dbd-4720-9fac-89181dab2eed', name: 'SmithRidge' },
   { id: '805b9a63-33af-4aaf-bc7e-e3631888b114', name: 'Sheffield 1' },
   { id: '6e5934fe-fba5-4f7a-84ed-c6bf5bde5215', name: 'Sheffield 2' },
   { id: '9d6b8309-ebd6-407c-81f8-5430df3e2a4c', name: 'Starr Unit 1' },
-  { id: 'c77c11e7-53be-4693-92e8-8ef0985b5673', name: 'Starr 2' },
   { id: 'e059dac6-5d5e-4497-8372-c6350776d401', name: 'Sunrise' },
   { id: 'aa5e3f20-612c-44ed-b414-fe00edbfa561', name: 'Sweetcake' },
   { id: 'b7e50bb8-df96-4015-a930-40243326d060', name: 'Tamanny' },
@@ -112,7 +109,7 @@ async function getAccessToken(redisClient, locationId) {
 
   console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
 
-const response = await axios.post(
+  const response = await axios.post(
     'https://api.smartthings.com/oauth/token',
     new URLSearchParams({
       grant_type: 'refresh_token',
@@ -130,8 +127,6 @@ const response = await axios.post(
 
   const newRefreshToken = response.data.refresh_token;
   await redisClient.set(`refresh_token:${locationId}`, newRefreshToken);
-  console.log(`New refresh token saved for location ${locationId}`);
-
   return response.data.access_token;
 }
 
@@ -176,34 +171,13 @@ async function checkLocation(location, redisClient) {
   }
 
   const lowBatteryDevices = [];
-  const offlineDevices = [];
-  const offlineHubs = [];
 
   for (const device of devices) {
     await sleep(500);
 
     try {
-      const healthResponse = await axios.get(
-        `https://api.smartthings.com/v1/devices/${device.deviceId}/health`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-
-      const state = healthResponse.data.state;
-      const lastUpdated = new Date(healthResponse.data.lastUpdatedDate).toLocaleString();
-
-      if (state === 'OFFLINE') {
-        if (device.type === 'HUB') {
-          console.log(`Hub offline: ${device.label} at ${location.name}`);
-          offlineHubs.push({ name: device.label, since: lastUpdated });
-        } else {
-          console.log(`Device offline: ${device.label} at ${location.name}`);
-          offlineDevices.push({ name: device.label, since: lastUpdated });
-        }
-      }
-
       const hasBattery = device.components?.[0]?.capabilities?.some(c => c.id === 'battery');
       if (hasBattery) {
-        await sleep(500);
         const statusResponse = await axios.get(
           `https://api.smartthings.com/v1/devices/${device.deviceId}/status`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -214,24 +188,9 @@ async function checkLocation(location, redisClient) {
           lowBatteryDevices.push({ name: device.label, battery: batteryValue });
         }
       }
-
     } catch (err) {
       console.log(`Error checking ${device.label}: ${err.message}`);
     }
-  }
-
-  for (const hub of offlineHubs) {
-    await sendEmail(
-      `URGENT - Hub Offline — ${location.name}`,
-      `Hub: ${hub.name}\nLocation: ${location.name}\nOffline Since: ${hub.since}\nStatus: OFFLINE\n\nThis hub being offline may affect all devices at this location.\nPlease check immediately.`
-    );
-  }
-
-  if (offlineDevices.length > 0) {
-    await sendEmail(
-      `SmartThings - Devices Offline — ${location.name}`,
-      `The following devices are offline at ${location.name}:\n\n${offlineDevices.map(d => `• ${d.name} (since ${d.since})`).join('\n')}\n\nPlease check these devices.`
-    );
   }
 
   if (lowBatteryDevices.length > 0) {
@@ -243,7 +202,7 @@ async function checkLocation(location, redisClient) {
 }
 
 async function main() {
-  console.log('Starting SmartThings alerts check...');
+  console.log('Starting SmartThings battery check...');
 
   const redisClient = createClient({ url: process.env.REDIS_URL });
   await redisClient.connect();

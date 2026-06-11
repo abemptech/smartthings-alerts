@@ -76,10 +76,25 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-async function checkLocation(location, redisClient, accessToken) {
+async function sendEmail(subject, body) {
+  console.log(`Sending email: ${subject}`);
+  await transporter.sendMail({
+    from: GMAIL_USER,
+    to: ALERT_EMAIL,
+    subject,
+    text: body
+  });
+  console.log(`Email sent: ${subject}`);
+}
+
+async function checkLocation(location, redisClient) {
   console.log(`Checking location: ${location.name}`);
 
-  if (!accessToken) return;
+  const accessToken = await redisClient.get(`access_token:${location.id}`);
+  if (!accessToken) {
+    console.log(`No access token for ${location.name} — skipping`);
+    return;
+  }
 
   let devices;
   try {
@@ -113,10 +128,8 @@ async function checkLocation(location, redisClient, accessToken) {
       const stateKey = `state:${device.deviceId}`;
       const previousState = await redisClient.get(stateKey);
 
-      // Save current state
       await redisClient.set(stateKey, state);
 
-      // Only alert if state changed to OFFLINE
       if (state === 'OFFLINE' && previousState !== 'OFFLINE') {
         if (device.type === 'HUB') {
           console.log(`Hub went offline: ${device.label} at ${location.name}`);

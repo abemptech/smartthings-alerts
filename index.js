@@ -90,17 +90,15 @@ const transporter = nodemailer.createTransport({
 async function getAccessToken(redisClient, locationId) {
   const lockKey = `lock:${locationId}`;
   const refreshTokenKey = `refresh_token:${locationId}`;
-  
-  // Wait for lock to be released (max 10 seconds)
+
   let attempts = 0;
   while (await redisClient.get(lockKey) && attempts < 20) {
     await sleep(500);
     attempts++;
   }
-  
-  // Set lock
+
   await redisClient.set(lockKey, '1', { EX: 30 });
-  
+
   try {
     const refreshToken = await redisClient.get(refreshTokenKey);
     const appNum = await redisClient.get(`app_num:${locationId}`) || '1';
@@ -145,13 +143,8 @@ async function getAccessToken(redisClient, locationId) {
 
     return response.data.access_token;
   } finally {
-    // Release lock
     await redisClient.del(lockKey);
   }
-}
-  const newRefreshToken = response.data.refresh_token;
-  await redisClient.set(`refresh_token:${locationId}`, newRefreshToken);
-  return response.data.access_token;
 }
 
 async function sendEmail(subject, body) {

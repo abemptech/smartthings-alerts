@@ -2,16 +2,6 @@ import axios from 'axios';
 import nodemailer from 'nodemailer';
 import { createClient } from 'redis';
 
-const ST_CLIENT_ID = process.env.ST_CLIENT_ID;
-const ST_CLIENT_SECRET = process.env.ST_CLIENT_SECRET;
-const ST_CLIENT_ID_2 = process.env.ST_CLIENT_ID_2;
-const ST_CLIENT_SECRET_2 = process.env.ST_CLIENT_SECRET_2;
-const ST_CLIENT_ID_3 = process.env.ST_CLIENT_ID_3;
-const ST_CLIENT_SECRET_3 = process.env.ST_CLIENT_SECRET_3;
-const ST_CLIENT_ID_4 = process.env.ST_CLIENT_ID_4;
-const ST_CLIENT_SECRET_4 = process.env.ST_CLIENT_SECRET_4;
-const ST_CLIENT_ID_GV = process.env.ST_CLIENT_ID_GV;
-const ST_CLIENT_SECRET_GV = process.env.ST_CLIENT_SECRET_GV;
 const ALERT_EMAIL = process.env.ALERT_EMAIL;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
@@ -87,63 +77,12 @@ const transporter = nodemailer.createTransport({
 });
 
 async function getAccessToken(redisClient, locationId) {
-  const lockKey = `lock:${locationId}`;
-  const refreshTokenKey = `refresh_token:${locationId}`;
-
-  let attempts = 0;
-  while (await redisClient.get(lockKey) && attempts < 20) {
-    await sleep(500);
-    attempts++;
+  const accessToken = await redisClient.get(`access_token:${locationId}`);
+  if (!accessToken) {
+    console.log(`No access token found for location ${locationId} — skipping`);
+    return null;
   }
-
-  await redisClient.set(lockKey, '1', { EX: 30 });
-
-  try {
-    const refreshToken = await redisClient.get(refreshTokenKey);
-    const appNum = await redisClient.get(`app_num:${locationId}`) || '1';
-
-    if (!refreshToken) {
-      console.log(`No refresh token found for location ${locationId} — skipping`);
-      return null;
-    }
-
-    const clientId = appNum === '2' ? ST_CLIENT_ID_2 :
-                     appNum === '3' ? ST_CLIENT_ID_3 :
-                     appNum === '4' ? ST_CLIENT_ID_4 :
-                     appNum === 'GV' ? ST_CLIENT_ID_GV :
-                     ST_CLIENT_ID;
-    const clientSecret = appNum === '2' ? ST_CLIENT_SECRET_2 :
-                         appNum === '3' ? ST_CLIENT_SECRET_3 :
-                         appNum === '4' ? ST_CLIENT_SECRET_4 :
-                         appNum === 'GV' ? ST_CLIENT_SECRET_GV :
-                         ST_CLIENT_SECRET;
-
-    console.log(`Using app ${appNum} for location ${locationId}: ${refreshToken.substring(0, 8)}...`);
-
-    const response = await axios.post(
-      'https://api.smartthings.com/oauth/token',
-      new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
-        }
-      }
-    );
-
-    const newRefreshToken = response.data.refresh_token;
-    await redisClient.set(refreshTokenKey, newRefreshToken);
-    console.log(`New refresh token saved for location ${locationId}`);
-
-    return response.data.access_token;
-  } finally {
-    await redisClient.del(lockKey);
-  }
+  return accessToken;
 }
 
 async function sendEmail(subject, body) {
@@ -160,14 +99,7 @@ async function sendEmail(subject, body) {
 async function checkLocation(location, redisClient) {
   console.log(`Checking location: ${location.name}`);
 
-  let accessToken;
-  try {
-    accessToken = await getAccessToken(redisClient, location.id);
-  } catch (err) {
-    console.log(`Failed to get token for ${location.name}: ${err.message}`);
-    return;
-  }
-
+  const accessToken = await getAccessToken(redisClient, location.id);
   if (!accessToken) return;
 
   let devices;
